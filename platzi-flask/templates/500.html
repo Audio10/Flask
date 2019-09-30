@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+
+{% block title %}
+{{ super() }}
+    500
+{% endblock title %}
+
+{% block content %}
+    <h1>Lo sentimos en estos momentos nos encontramos con dificultades tecnicas. </h1>
+    <p> {{ error }}</p>
+{% endblock content %}
