@@ -32,7 +32,7 @@ Estos son los conceptos principales que debes entender antes de hacer un Hello W
   flask run
   ```
 
-## Debugging en Flask
+## Debugging en Flask.
 
 **Debugging:** es el proceso de identificar y corregir errores de programación.
 
@@ -43,6 +43,8 @@ export FLASK_DEBUG=1
 echo $FLASK_DEBUG
 ```
 
+## Development mode.
+
 Para activar el *development mode* debes escribir lo siguiente en la consola:
 
 ```bash
@@ -50,9 +52,37 @@ export FLASK_ENV=development
 echo $FLASK_ENV
 ```
 
-**SESSION:** es un intercambio de información interactiva semipermanente, también conocido como diálogo, una conversación o un encuentro, entre dos o más dispositivos de comunicación, o entre un ordenador y usuario.
+## Session.
 
-## Request y Response
+SESSION:** es un intercambio de información interactiva semipermanente, también conocido como diálogo, una conversación o un encuentro, entre dos o más dispositivos de comunicación, o entre un ordenador y usuario.
+
+Esta es usada en flask para encriptar y guardarla con una llave secreta para que se maneje la  información de maneja seguro.
+
+Dentro de la app existe un diccionario llamado **config** en el cual mediante el identificador **SECRET_KEY** se  puede asignar un hash para el encriptado de la sesión.
+
+```python
+app.config['SECRET_KEY'] = 'SUPER SECRETO'
+```
+
+Después debemos importar **session**.
+
+```python
+from flask import session
+```
+
+Y para asignar un valor a la sesión se asigna mediante el diccionario de esta misma.
+
+```python
+session['user_ip'] = user_ip
+```
+
+Y para recuperarlo se ocupa get.
+
+```python
+user_ip = session.get('user_ip')
+```
+
+# Request y Response
 
 **Logging:** es una grabación secuencial en un archivo o en una base de datos de todos los eventos que afectan a un proceso particular.
 
@@ -474,5 +504,216 @@ Despues dentro de nuestro archivo **base.html** debemos extender **bootstrap/bas
     
     {% endblock  %}
 {% endblock body %}
+```
+
+# Implementación de Flask-Bootstrap y Flask-WTF
+
+Flask-WTF es una librería que sirve para renderear y validar forms en Python.
+
+Agregar flask-wtf al **requeriments.txt**
+
+```python
+flask-wtf
+```
+
+## Imports
+
+**main.py**
+
+```python
+from flask_wtf import FlaskForm
+from wtforms.fields import StringField, PasswordField, SubmitField
+
+from wtforms.validators import DataRequired
+```
+
+- Donde importaremos FlaskForm y crearemos una clase que extienda de esta misma.
+- Importamos los fields para el formulario.
+- Importamos DataRequired que valida la forma antes de enviarla al servidor.
+
+## Creación de form
+
+Se crea una clase que extiende de FlaskForm que será nuestro formulario.
+
+Para validar los campos debemos anexar el parámetro **validatos** al cual sele asigna una lista de validadores en este caso una instancia de **DataRequired** que sera el encargado de validad.
+
+**main.py**
+
+```python
+class LoginForm(FlaskForm):
+    username = StringField('Nombre de usuario', validators=[DataRequired()])
+    password = PasswordField('Password', validators=[DataRequired()])
+    subtmi = SubmitField('Enviar')
+```
+
+Después agregamos la **loginform** al contexto de la función que la valla a ocupar en este caso hello().
+
+Dentro de esta función en el decorador se agrega el parámetro methods en el cual se especifican los metodos http que va a aceptar.
+
+Agregaremos una variable **login_form** que va a hacer referencia a la forma. Y se enviara a la **sesion** el **username**.
+
+Utilizamos **validate_on_submit()** que es un metodo de **FlaskForm** que lo que hace es detectar cuando mandas un post y valida la forma dividiendo la función en 2 cuando usen **get** envía el template con la forma, pero si hacen un post y la forma es valida se envía un **redirect** al index.
+
+```python
+@app.route('/hello', methods=['GET', 'POST'])
+def hello():
+    user_ip = session.get('user_ip')
+    login_form = LoginForm()
+    username = session.get('username')
+    
+    context = {
+        'user_ip': user_ip,
+        'todos': todos,
+        'login_form': login_form,
+        'username': username
+    }
+    
+    if login_form.validate_on_submit():
+        username = login_form.username.data
+        session['username'] = username
+        
+        flash('Nombre de usuario registrado con exito!')
+        return redirect(url_for('index'))
+
+    return render_template('hello.html', **context)
+    
+```
+
+**hello.html**
+
+Para inyectar formas rápidamente se puede ocupar **bootstrap/wtf.html**
+
+```jinja2
+{% import 'bootstrap/wtf.html' as wtf %}
+
+
+<div class="container">
+        <!-- <form action="{{ url_for('hello')}}" method="POST">
+            {{login_form.username}}
+            {{login_form.username.label}}
+        </form> -->
+
+        {{ wtf.quick_form(login_form)}}
+    </div>
+```
+
+## Flash (mensajes emergentes)
+
+importamos flash.
+
+```
+from flask import flash
+```
+
+**base.html**
+
+Donde get_flashed_messages() es una función que contiene todos los flashes.
+
+**Nota**: Es muy importante heredar los **scripts** de bootstrap al final del body, sino no se podrá interactuar de maneja correcta el flash.
+
+```jinja2
+{% extends 'bootstrap/base.html' %}
+
+{% block head %}
+    {{ super() }}     
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css')}}">
+    <title>
+        {% block title %} Flask Platzi | {% endblock %}
+    </title>
+{% endblock head %}
+
+{% block body %}
+    
+    {% block navbar %}
+        {% include 'navbar.html' %}
+    {% endblock navbar %}
+    
+    {% for message in get_flashed_messages() %}
+        <div class="alert alert-success alert-dismissible">
+            <button type="button" 
+                    data-dismiss="alert" 
+                    class="close">&times;</button>
+            {{ message }}
+        </div>
+    {% endfor %}
+    
+    {% block content %}
+    
+    {% endblock  %}
+
+    {% block scripts %}
+        {{ super() }}
+    {% endblock %}
+{% endblock body %}
+```
+
+# Pruebas básicas con Flask-testing
+
+La etapa de pruebas se denomina *testing* y se trata de una investigación exhaustiva, no solo técnica sino también empírica, que busca reunir información objetiva sobre la calidad de un proyecto de software, por ejemplo, una aplicación móvil o un sitio web.
+
+El objetivo del *testing* no solo es encontrar fallas sino también aumentar la confianza en la calidad del producto, facilitar información para la toma de decisiones y detectar oportunidades de mejora.
+
+## imports
+
+```
+import unittest
+```
+
+## Creación
+
+Creamos un comando con el decorador **@app.cli.command()** el cual se va a encargar de buscar todos los tests mediante el TestLoader.
+
+Y mediante unittest va a correr todos los tests que se encuentran en el archivo denominado tests.
+
+**main.py**
+
+```
+@app.cli.command()
+def test():
+    tests = unittest.TestLoader().discover('tests')
+    unittest.TextTestRunner().run(tests)
+```
+
+**tests.py**
+
+Donde nuestra clase **MainTest** extendera de **TestCase** y se debe implementar el método **create_app** que retorna una aplicación sobre la cual se van a hacer las pruebas.
+
+```python
+from flask_testing import TestCase
+from flask import current_app, url_for
+
+from main import app
+
+class MainTest(TestCase):
+    def create_app(self):
+        #Asignando ambiente de testing
+        app.config['TESTING'] = True
+        #Asignacion de no uso de tokkens porque no hay sesion activa.
+        app.config['WTF CSRF ENABLED'] = False
+        return app
+    
+    def test_app_exists(self):
+        self.assertIsNotNone(current_app)
+        
+    def test_app_in_test_mode(self):
+        self.assertTrue(current_app.config['TESTING'])
+        
+    def test_index_redirects(self):
+        response = self.client.get(url_for('index'))
+        self.assertRedirects(response, url_for('hello'))
+        
+    def test_hello_get(self):
+        response =  self.client.get(url_for('hello'))
+        self.assert200(response)
+        
+    def test_hello_post(self):
+        fake_form = {
+            'username': 'fake',
+            'password': 'fake-password'
+        }
+        response = self.client.post(url_for('hello'), data=fake_form)
+        
+        self.assertRedirects(response, url_for('index'))
 ```
 
