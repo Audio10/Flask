@@ -717,3 +717,13 @@ class MainTest(TestCase):
         self.assertRedirects(response, url_for('index'))
 ```
 
+# App Factory (Configuración de carpetas)
+
+Básicamente lo que se hace es establecer las carpetas de esta forma.
+
+![1570128712349](C:\Users\claud\AppData\Roaming\Typora\typora-user-images\1570128712349.png)
+
+# Uso de Blueprints
+
+Es como una pequeña aplicación de flask que tiene rutas, vistas y templates pero debe ser importada dentro de una aplicación de flask para funcionar.
+
