@@ -1,8 +1,8 @@
+from . import auth
+from app.forms import LoginForm
 from flask import render_template, session, redirect, flash, url_for
 from flask_login import login_user, login_required, logout_user
-from app.forms import LoginForm
 from werkzeug.security import generate_password_hash, check_password_hash
-from . import auth
 from app.firestore_service import get_user, user_put
 from app.models import UserModel, UserData
 
@@ -50,7 +50,7 @@ def signup():
 
     if signup_form.validate_on_submit():
         username = signup_form.username.data
-        password =  signup_form.password.data
+        password = signup_form.password.data
 
         user_doc = get_user(username)
 

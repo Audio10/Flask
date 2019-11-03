@@ -725,5 +725,445 @@ Básicamente lo que se hace es establecer las carpetas de esta forma.
 
 # Uso de Blueprints
 
-Es como una pequeña aplicación de flask que tiene rutas, vistas y templates pero debe ser importada dentro de una aplicación de flask para funcionar.
+Es como una pequeña aplicación de flask que tiene rutas, vistas y templates pero debe ser importada dentro de una aplicación de flask para funcionar. Estos nos permiten hacer rutas especificas encargadas de una tarea en especifico y permite la modularidad.
+
+Crearemos un nuevo directorio llamado **auth** que va a ser un blueprint.
+
+**/app/auth/__init__.py**
+
+```python
+from flask import Blueprint
+# llamado, el nombre de este archivo y con prefijo auth.
+auth = Blueprint('auth', __name__, url_prefix='/auth')
+
+from . import views
+```
+
+**/app/auth/views.py**
+
+```python
+from flask import render_template
+
+from app.forms import LoginForm
+
+from . import auth
+
+
+@auth.route('/login')
+def login():
+    context = {
+        'login_form': LoginForm()
+    }
+    return render_template('login.html', **context)
+```
+
+## Uso de Blueprints II.
+
+La responsabilidad del login se transfiere al Blueprint el cual renderiza en la ruta **localhost:5000/auth/login** el login de la aplicación.
+
+```python
+from flask import render_template, session, redirect, flash, url_for
+
+from app.forms import LoginForm
+
+from . import auth
+
+
+@auth.route('/login', methods=['GET', 'POST'])
+def login():
+    login_form = LoginForm()
+    context = {
+        'login_form': login_form
+    }
+
+    if login_form.validate_on_submit():
+        username = login_form.username.data
+        session['username'] = username
+
+        flash('Nombre de usario registrado con éxito!')
+
+        return redirect(url_for('index'))
+
+    return render_template('login.html', **context)
+```
+
+# Base de datos y App Engine con Flask
+
+Flask no cuenta con un ORM por lo cual podemos utilizar cualquier base de datos de preferencia.
+
+- **Bases de Datos SQL:** su composición esta hecha con bases de datos llenas de tablas con filas que contienen campos estructurados. No es muy flexible pero es el más usado. Una de sus desventajas es que mientras más compleja sea la base de datos más procesamiento necesitará.
+- **Base de Datos NOSQL:** su composición es no estructurada, es abierta y muy flexible a diferentes tipos de datos, no necesita tantos recursos para ejecutarse, no necesitan una tabla fija como las que se encuentran en bases de datos relacionales y es altamente escalable a un bajo costo de hardware.
+
+# Configuración de Google Cloud SDK
+
+
+  Ahora vamos a instalar el Google Cloud SDK. Simplemente debemos descargar un ejecutable desde alguno de estos enlaces:
+
+Para Windows dirígete a https://cloud.google.com/sdk/docs/quickstart-windows
+Para MacOS dirígete a link https://cloud.google.com/sdk/docs/quickstart-macos
+Para Linux dirígete a https://cloud.google.com/sdk/docs/quickstart-linux
+
+Una vez que corrimos el instalador, podemos verificar que instalamos correctamente el SDK corriendo en una terminal el siguiente comando:
+
+```
+which gcloud
+```
+
+Ahora inicializamos *gcloud* y hacemos *login* con:
+
+```
+gcloud init
+```
+
+Autenticarte.
+
+```
+gcloud auth login
+```
+
+Para poder utilizar el API de firestore.
+
+```
+gcloud auth application-default login
+```
+
+Ver información de configuración..
+
+```
+gcloud config list
+```
+
+Escoger proyecto.
+
+```
+gcloud config set project platzi-flask
+```
+
+# Implementación de Firestore.
+
+ En el requeriments.txt se debe agregar la dependencia.
+
+```
+firebase-admin
+```
+
+Se debe crear un archivo llamado **firestore_service.py**
+
+```python
+import firebase_admin
+# Necesarias para firmarnos con firestore.
+from firebase_admin import credentials
+from firebase_admin import firestore
+
+# Forma de crear credencial para comunicarte.
+credential = credentials.ApplicationDefault()
+firebase_admin.initialize_app(credential)
+
+# Instancia que permite comunicarnos con firestore.
+db = firestore.client()
+
+
+def get_users():
+    return db.collection('users').get()
+
+
+def get_todos(user_id):
+    return db.collection('users')\
+        .document(user_id)\
+        .collection('todos').get()
+
+```
+
+Uso de **firestore_servcice.py** en **main.py**
+
+Primero importamos las funciones de firestore_service.
+
+```python
+from app.firestore_service import get_users, get_todos, put_todo, delete_todo, update_todo
+
+```
+
+**Nota:** Es muy importante que cuando se obtienen datos de firestore estos se deben convertir a diccionario para poder acceder a los campos.
+
+```
+    users = get_users()
+
+    for user in users:
+        print(user.id)
+        print(user.to_dict()['password'])
+
+
+```
+
+# Autenticación de usuarios: Login
+
+Importamos **flack-login**
+
+```
+flask-login
+```
+
+Creamos una clase que va a ser la encargada de Mandar el modelo que se usara para el **LoginManager**.
+
+```python
+from flask_login import UserMixin
+from .firestore_service import get_user
+
+
+class UserData:
+    def __init__(self, username, password):
+        self.username = username
+        self.password = password
+
+
+class UserModel(UserMixin):
+    def __init__(self, user_data):
+        """
+        :param user_data: UserData
+        """
+        self.id = user_data.username
+        self.password = user_data.password
+
+    @staticmethod
+    def query(user_id):
+        user_doc = get_user(user_id)
+        user_data = UserData(
+            username=user_doc.id,
+            password=user_doc.to_dict()['password']
+        )
+
+        return UserModel(user_data)
+```
+
+Importar en **__init__.py**    **LoginManager**  y se debe asignar la **app**.
+
+```python
+from flask import Flask
+from flask_bootstrap import Bootstrap
+from flask_login import LoginManager
+from .config import Config
+from .auth import auth
+# Importar el modelo.
+from .models import UserModel
+
+# ASIGNACION DEL LOGIN QUE SE LANZARA.
+login_manager = LoginManager()
+login_manager.login_view = 'auth.login'
+
+# Funcion que regresa un UserModel cada vez que se quiera cargar un usuario.
+@login_manager.user_loader
+def load_user(username):
+    return UserModel.query(username)
+
+
+def create_app():
+    app = Flask(__name__)
+    bootstrap = Bootstrap(app)
+
+    app.config.from_object(Config)
+# INICIACION DEL LOGIN_MANAGER.
+    login_manager.init_app(app)
+
+    app.register_blueprint(auth)
+
+    return app
+
+
+```
+
+**main.py**
+
+Para proteger una ruta con **login** usamos el decorador.
+
+```
+@login_required
+```
+
+# Autenticación de usuarios: Logout
+
+## Documentación Login.
+
+[Documentacion Login.](https://flask-login.readthedocs.io/en/latest/)
+
+# EXAMEN
+
+¿Qué variable hay que declarar en la terminal para prender el servidor de Flask?
+
+```
+FLASK_APP=main.py
+```
+
+¿Cómo se llama el directorio donde Flask busca archivos estáticos por defecto?
+
+```
+static
+```
+
+¿Cuál es el template inicial que tenemos que extender en Bootstrap?
+
+```
+bootstrap/base.html
+```
+
+¿Con qué comando prendemos el servidor local?
+
+```
+flask run
+```
+
+¿Cómo debemos guardar un password del usuario?
+
+```
+Nunca en el texto original. Debemos utilizar una funcion para cifrarlo de manera segura, solo el usuario debe saber el valor.
+```
+
+¿Cómo se llama el archivo de configuración de AppEngine?
+
+```
+app.yaml
+```
+
+¿Para qué sirve Flask?
+
+```
+Crear Aplicaciones web, Crear un sistema de autenticacion, Crear API's.
+```
+
+¿Para qué nos sirve un Blueprint?
+
+```
+Para modularizar la aplicacion, son un patron de rutas, funciones y templates que nos permiten crear secciones de la aplicacion.
+```
+
+¿Cuál es el decorador para crear una función para manejar errores?
+
+```
+@app.errorhandler(codigo_de_error)
+```
+
+Nombre del método que tenemos que implementar en una nueva instancia de flask_testing.TestCase
+
+```
+create_app
+```
+
+Después de crear un nuevo Blueprint, ¿cómo lo integramos en la aplicación?
+
+```
+Llamando la funccion app.register_blueprint() y pasando nuestra nueva instancia de Blueprint como parametro.
+```
+
+Una aplicación web utiliza el internet y un __ para comunicarse con el servidor.
+
+```
+Navegador Web
+```
+
+¿Qué tipo de base de datos es Firestore?
+
+```
+No SQL Orientada a Documentos.
+```
+
+¿Para qué utilizamos @login_manager.user_loader?
+
+```
+En la funcion decorada implementamos una busqueda a la base de datos para cargar los datos del usuario.
+```
+
+¿Qué debes conocer para comenzar con Flask?
+
+```
+Conocimientos basicos de python, pip y virtualenv.
+```
+
+¿A qué nos referimos con microframework?
+
+```
+Un framework que no cuenta inicialmente con funcionalidades especificas, como ORM o autenticacion.
+```
+
+Flask-Login requiere la implementación de una clase UserModel con propiedades específicas.
+
+```
+Verdadero
+```
+
+Nombre de la variable que Flask expone para acceder a la información de la petición del usuario
+
+```
+request
+```
+
+Para desplegar una forma y encriptar la sesiones, debemos de declarar esta variable en app.config:
+
+```
+SECRET_KEY
+```
+
+¿Cuál es la sintaxis correcta para iniciar un bloque condicional?
+
+```
+{% %}
+```
+
+¿Cuál es la variable que expone flask_wtf.FlaskForm para validar formas cuando son enviadas y qué tipo de variable es?
+
+```
+validate_on_submit, boolean
+```
+
+¿Qué variable hay que crear en la terminal para activar el debugger y reloader?
+
+```
+FLASK_DEBUG=1
+```
+
+¿Qué es un flash?
+
+```
+Un mensaje que presenta informacion al usuario sobre la accion que acaba de realizar.
+```
+
+Variable que usamos para detectar si el usuario está firmado. Disponible en cualquier template.Variable que usamos para detectar si el usuario está firmado. Disponible en cualquier template.
+
+```
+current_user.is_authenticated
+```
+
+¿Con qué comando creamos una nueva instancia de Flask?
+
+```
+app = Flask(__name__)
+```
+
+¿Cómo debemos cuidar o manejar nuestro SECRET_KEY de producción?
+
+```
+
+```
+
+Sintaxis correcta para declarar una ruta dinámica "users" que recibe "user_id" como parámetro
+
+```
+/users/<user_id>
+```
+
+¿Cuál es el comando que agregamos después de instalar GCloud SDK?
+
+```
+gcloud
+```
+
+¿Cuál es la sintaxis correcta para representar una variable?
+
+```
+{{ variable }}
+```
+
+¿Cuál es la función correcta para crear un link interno a una ruta específica?
+
+```
+url_for('funcion')
+```
 
